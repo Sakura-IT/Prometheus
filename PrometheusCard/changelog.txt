@@ -1,0 +1,36 @@
+prometheus.card changelog
+
+NOTE: To compile "prometheus.card" you must have prometheus.library and
+Picasso96api.library header files installed in global GCC search path.
+
+version 6.500 (27.7.2002)
+
+- source compiles with GCC.
+- most of global variables moved to CardBase.
+- P96 private includes are now local.
+					
+version 6.501 (29.7.2002)
+
+- "boardinfo.h": Added preprocessor macros for both GCC and StormC4
+  registerized function parameters. Function definitions and
+  declarations in all source files changed.
+
+version 6.502 (17.8.2002)
+- "dma.c": MemList and MemRoot are now moved from global variables to
+  CardBase. There are no global variables in the whole prometheus.card
+  from now.
+- "dma.c": DMAMemChunk structures are now allocated from memory pool.
+- "dma.c": added check in FreeDMAMemory() against zero block size.
+- "dma.c": moved 'struct DMAMemChunk' definition to "card.h".
+- "card.h": 'dmc_Owner' field added to DMAMemChunk structure.
+- "dma.c": SetFunction() calls removed.
+
+version 6.503 (17.8.2002)
+- "card.h": AllocDMAMem() and FreeDMAMem() prototypes added.
+- "gcc_libinit.c": AllocDMAMem() and FreeDMAMem() added as public
+  library calls.
+
+version 6.504 (19.08.2002)
+- DMA memory list is protected by a semaphore.
+ 
+

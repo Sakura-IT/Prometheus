@@ -1,0 +1,74 @@
+prm-rtl8029.device history
+
+0.19 (06.09.2001)
+
+  FIXED: Interrupt server routine - should no more lock up with long
+         files transferred by FTP.
+
+  ADDED: AbortIO() proper handling.
+
+
+0.20 (09.09.2001)
+
+  ADDED: Raw packet support in CMD_WRITE and S2_BROADCAST (it was already done
+         for CMD_READ).
+
+
+0.21 (09.09.2001)
+
+  ADDED: Support for PROMISCUOUS and EXCLUSIVE mode per unit.
+
+
+0.22 (12.09.2001)
+
+  FIXED: Bug in SendPacket() caused every not SANA2IOF_RAW packet had 14
+         bytes of trash appended at the end.
+
+  FIXED: Bug in InitUnit() - UnitData pointer was not initialized at
+         first device opening.
+
+
+0.23 (17.09.2001)
+
+  ADDED: Support for S2_GETGLOBALSTATS command.
+
+  FIXED: S2_ONLINE now returns error when called before
+         S2_CONFIGINTERFACE.
+
+  FIXED: Write and read queues are now flushed with S2ERR_OUTOFSERVICE
+         on S2_OFFLINE command.
+
+  FIXED: Write and read requests are rejected with S2ERR_OUTOFSERVICE if
+         the device is in offline state.
+	
+      
+1.0 (16.09.2002)
+
+  ADDED: Support for PRM_BoardOwner tag of prometheus.library.
+	
+      
+1.1 (04.10.2002)
+
+  FIXED: S2_GETSTATIONADDRES returns MAC address from card ROM in
+	 ios2_DstAddr, and address set by software in ios2_SrcAddr.
+	 
+  FIXED: S2_CONFIGINTERFACE allows for overriding hardware address.
+  
+  ADDED: S2_CONFIGINTERFACE rejects 00:00:00:00:00:00 and FF:FF:FF:FF:FF:FF
+	 addresses.
+
+  FIXED: Added calls to HardwareReset() and HardwareInit() fix the problem
+	 with bad first read of hardware address after power on.
+
+1.2 (06.10.2002)
+
+  FIXED: Device was added to the system list even if opening of libraries
+	 failed. It fixes hangups when trying to open the device with 1.x
+	 prometheus.library (the device requires 2.x).
+	 
+1.3 (11.11.2002)
+
+  FIXED: A loop in interrupt handler could be leaved in spite of pending
+	 interrupts. It could lead to lost packets in heavy network traffic and
+	 slow CPU.
+

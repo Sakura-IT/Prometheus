@@ -1,0 +1,107 @@
+;NE2000 Ethernet driver install script
+;Grzegorz "Krashan" Kraszewski
+;$VER: Ne2000 install 0.21 (9.9.2001)
+
+(complete 0)
+
+;language strings
+(set #msg_welcome "Welcome in RTL8029 Ethernet board driver installer.")
+(set #msg_nocard "Sorry, install script did not found any RTL8029 based Ethernet card inserted in your Prometheus. Make sure it is inserted and working and run the script again.")
+(set #msg_destdir "Select the directory where the driver file will be copied to.")
+(set #msg_desthelp "There is really no reason why you may want to change the default 'DEVS:Networks/' location. But you are an expert, aren't you? So do what you want, but have been warned.")
+(set #msg_copydrv "Copying driver file.")
+(set #msg_choice "Select operation.")
+(set #msg_choice0 "[2pInstall/Update")
+(set #msg_choice1 "Remove")
+(set #msg_chelp "You can install the driver (or update if you have an older version installed already), or remove it from the system.")
+(set #msg_deldir "Select the directory where you have installed the driver.")
+(set #msg_delhelp "Well you are naming yourself an expert, so you are supposed to know where the driver is...")
+(set #msg_sure "Are you sure you want to remove RTL8029 Ethernet card driver from the system?")
+(set #msg_hsure "If you answer 'Yes' the driver will be deleted.")
+(set #msg_removed " has been removed from '")
+(set #msg_removed1 "' directory.")
+
+(if (= @language "polski")
+  	(
+    	(set #msg_welcome "Witaj w programie instalacyjnym sterownika do kart Ethernet na uk³adzie RTL8029.")
+      (set #msg_nocard "Niestety skrypt instalacyjny nie znalaz³ ¿adnej karty sieciowej z uk³adem RTL8029 w Twoim Prometeuszu. Upewnij siê, ¿e karta jest zainstalowana i sprawna i uruchom skrypt jeszcze raz.")
+      (set #msg_destdir "Wybierz katalog, do którego zostanie skopiowany plik sterownika.")
+      (set #msg_desthelp "Naprawdê nie ma powodu aby zmieniaæ domy¶lny katalog 'DEVS:Networks/' na inny. No ale przecie¿ jeste¶ ekspertem... Rób jak uwa¿asz, ale zosta³e¶ ostrze¿ony.")
+      (set #msg_copydrv "Kopiujê plik sterownika.")
+      (set #msg_choice "Wybierz operacjê.")
+      (set #msg_choice0 "[2pInstalacja/aktualizacja")
+      (set #msg_choice1 "Usuniêcie")
+      (set #msg_chelp "Mo¿esz zainstalowaæ sterownik (albo zaktualizowaæ, je¿el masz ju¿ starsz± wersjê), albo usun±æ go z systemu.")
+      (set #msg_delhelp "Uwa¿asz siê za eksperta, wiêc powiniene¶ wiedzieæ, gdzie jest ten sterownik...")
+      (set #msg_sure "Czy na pewno chcesz usun±æ sterownik kart sieciowych Ethernet RTL8029 z systemu?")
+      (set #msg_hsure "Je¿eli odpowiesz 'Tak' sterownik zostanie skasowany.")
+      (set #msg_removed " zosta³ usuniêty z katalogu '")
+      (set #msg_removed1 "'.")
+  	)
+)
+
+(set #destpath "DEVS:Networks")
+(welcome #msg_welcome)
+(set #cards (run "findcard >NIL: VENDOR=10EC DEVICE=8029" (safe)))
+(set #operation
+	(askchoice
+   	(prompt #msg_choice)
+      (help #msg_chelp)
+      (choices #msg_choice0 #msg_choice1)
+   )
+)
+
+(debug #operation)
+
+(if (= #operation 0)
+	(
+      (if (> #cards 0)
+      	(
+         	(if (= @user-level 2)
+            	(set #destpath
+            		(askdir
+                  	(prompt #msg_destdir)
+                     (help #msg_desthelp)
+                     (default #destpath)
+                     (newpath)
+                  )
+            	)
+            )
+
+            (copylib
+            	(prompt #msg_copydrv)
+               (help #msg_copydrv)
+               (confirm)
+               (source "prm-rtl8029.device")
+               (dest #destpath)
+               (infos)
+            )
+       	)
+         (
+         	(abort #msg_nocard)
+         )
+      )
+   )
+
+   (
+   	(if (= @user-level 2)
+      	(set #destpath
+      		(askdir
+            	(prompt #msg_deldir)
+               (help #msg_delhelp)
+               (default #destpath)
+            )
+      	)
+      )
+
+      (if (= 1 (askbool (prompt #msg_sure) (help #msg_hsure) (default 0))
+      	(delete (tackon #destpath "prm-rtl8029.device") (prompt "") (help "") (infos))
+         (set #msg_exit (cat @app-name #msg_removed #destpath #msg_removed1))
+         (exit #msg_exit (quiet))
+         )
+      )
+   )
+)
+
+(set @default-dest #destpath)
+(exit)

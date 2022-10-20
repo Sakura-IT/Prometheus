@@ -1,0 +1,6 @@
+##base _ChipBase
+##bias 30
+##public
+InitChip(bi)(a0)
+##end
+
