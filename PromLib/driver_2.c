@@ -1,4 +1,6 @@
 /* 
+$VER: driver.c 4.3 (26.01.2023) by Dennis Boon
+- Fixed set-up of graphics memory of Prometheus cards with original firmware
 $VER: driver.c 4.2 (15.02.2022) by Dennis Boon
 - Fixed set-up of bridges beyond bridges
 $VER: driver.c 4.1 (04.12.2021) by Dennis Boon
@@ -17,7 +19,7 @@ $VER: driver.c 2.5 (19.12.2002) by Grzegorz Kraszewski
 */
 
 //#define TESTEXE
-#define DEBUG
+//#define DEBUG
 //void illegal(void)="\tillegal\n";
 
 #define __NOLIBBASE__
@@ -199,7 +201,7 @@ struct PciConfig
 #define __DBG__
 #endif
 
-char libid[]   = "\0$VER: prometheus.library 4.2 " __DBG__ "(15.02.2022)\r\n";
+char libid[]   = "\0$VER: prometheus.library 4.3 " __DBG__ "(26.01.2023)\r\n";
 char build[]   = "build date: " __DATE__ ", " __TIME__ "\n";
 char libname[] = "prometheus.library\0";
 
@@ -933,7 +935,8 @@ void WriteAddresses(struct PrometheusBase *pb, struct ConfigDev *cdev)
 		{
 		  switch (srq->sr_Type)
 		  {
-			case BLOCK_MEMORY:    mem_highaddr -= srq->sr_Size; break;
+			case BLOCK_GFXMEM:
+            case BLOCK_MEMORY:    mem_highaddr -= srq->sr_Size; break;
 			case BLOCK_INOUT:     io_highaddr -= srq->sr_Size;  break;
 		  }
 
@@ -946,7 +949,8 @@ void WriteAddresses(struct PrometheusBase *pb, struct ConfigDev *cdev)
 
 		  switch (srq->sr_Type)
 		  {
-			  case BLOCK_MEMORY:
+			  case BLOCK_GFXMEM:
+              case BLOCK_MEMORY:
 			  *srq->sr_CfgAddr = swapl((mem_highaddr | 1) & mask);
 			  srq->sr_Tag->ti_Data = mem_highaddr;
 			  D(kprintf("[WriteAddresses] Pri: %03ld, addr: 0x%08lx, bus: %ld\n", srq->sr_Node.ln_Pri, mem_highaddr, pbus->br_BusNr));
