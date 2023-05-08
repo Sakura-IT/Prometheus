@@ -1,4 +1,4 @@
-/* $VER: dma.c 6.505 (8.9.2002) */
+/* $VER: dma.c 7.601 (08.05.2023) */
 
 #include <exec/libraries.h>
 

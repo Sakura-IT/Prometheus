@@ -1,4 +1,8 @@
-/* $VER: Prometheus.card 6.504 (19.8.2002) by Grzegorz Kraszewski */
+/*
+$VER: Prometheus.card 7.601 (08.05.2023) by Dennis Boon with fixes from Mathias Heyer
+- Added more S3 cards for DMA to card_s3virge.c
+$VER: Prometheus.card 6.504 (19.08.2002) by Grzegorz Kraszewski
+*/
 
 #define __NOLIBBASE__
 
@@ -25,9 +29,9 @@ LONG LibReserved (void);
 struct CardBase *LibInit (__REGD0(struct CardBase* cb), __REGA0(APTR seglist), __REGA6(struct Library *sysb));
 
 #define VERSION  7
-#define REVISION 600
+#define REVISION 601
 
-char libid[]   = "\0$VER: Prometheus.card 7.600 (18.5.2021).\r\n";
+char libid[]   = "\0$VER: Prometheus.card 7.601 (08.05.2023).\r\n";
 char libname[] = "Prometheus.card";
 
 int main(void)

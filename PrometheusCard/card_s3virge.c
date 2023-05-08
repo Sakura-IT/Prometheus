@@ -40,7 +40,9 @@ BOOL InitS3ViRGE(struct CardBase *cb, struct BoardInfo *bi)
 
 		switch(ci.Device)
 		{
-			case 0x8A01:	//
+			case 0x8A01:	// VirgeDX/GX
+			case 0x8A02:	// VirgeGX2
+			case 0x5631:	// 86c325 [ViRGE]
 				found = TRUE;
 				break;
 			default:
