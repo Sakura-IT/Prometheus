@@ -1,4 +1,10 @@
 /* 
+$VER: driver.c 4.4 (08.05.2023) by Dennis Boon with fixes from Mathias Heyer
+- Removed restriction on AllocDMA/FreeDMA - prometheus.card now does the check
+- Some S3 cards can now be used for DMA purposes
+- Search for Prometheus.card under LIBS:Picasso96/
+- Fixed translation of physical to virtual address
+- Increased reset time of the Prometheus/Firebird bridge per hints from Mathias Heyer
 $VER: driver.c 4.3 (26.01.2023) by Dennis Boon
 - Fixed set-up of graphics memory of Prometheus cards with original firmware
 $VER: driver.c 4.2 (15.02.2022) by Dennis Boon
@@ -77,12 +83,16 @@ typedef struct
 #define VID_MOTOROLA           0x1057
 #define VID_TI                 0x104c
 #define VID_ATI                0x1002
+#define VID_S3                 0x5333
 
 #define DEVID_MPC107           0x0004
 #define DEVID_MPC834X          0x0086
 #define DEVID_MPC831X          0x00b6
 #define DEVID_POWERPLUSIII     0x480b
 #define DEVID_PERMEDIA2        0x3d07
+#define DEVID_VIRGE3D          0x5631
+#define DEVID_VIRGEDX          0x8A01
+#define DEVID_VIRGEGX2         0x8A02
 
 struct PrometheusBase
 {
@@ -193,7 +203,9 @@ struct PciConfig
 #define BLOCK_CFGMEM   4
 
 #define VERSION  4
-#define REVISION 2
+#define REVISION 4
+
+#define CARD_NAME "Picasso96/Prometheus.card"
 
 #ifdef DEBUG
 #define __DBG__ "debug "
@@ -201,7 +213,7 @@ struct PciConfig
 #define __DBG__
 #endif
 
-char libid[]   = "\0$VER: prometheus.library 4.3 " __DBG__ "(26.01.2023)\r\n";
+char libid[]   = "\0$VER: prometheus.library 4.4 " __DBG__ "(08.05.2023)\r\n";
 char build[]   = "build date: " __DATE__ ", " __TIME__ "\n";
 char libname[] = "prometheus.library\0";
 
@@ -732,6 +744,8 @@ void QueryCard (struct PrometheusBase *pb, struct PCIBus *pcibus, volatile struc
 				memtype = BLOCK_GFXMEM;
               else if((vendor == VID_3DFX) && (basereg == 0))
                 memtype = BLOCK_CFGMEM;
+              else if((vendor == VID_S3) && (basereg == 0) && (device == DEVID_VIRGE3D || device == DEVID_VIRGEDX || device == DEVID_VIRGEGX2))
+                memtype = BLOCK_GFXMEM;
               else
                 memtype = BLOCK_MEMORY;
               memsize = -(memsize & 0xFFFFFFF0);
@@ -1093,11 +1107,11 @@ void ConfigurePrometheus(struct PrometheusBase *pb, struct ConfigDev *cdev)
     cfspace = (APTR)((ULONG)cdev->cd_BoardAddr + FS_PCI_ADDR_CONFIG0);
     fs_cfreg = (ULONG*)((ULONG)cfspace + 0x8000);
     *fs_cfreg |= 0x80000000; 				/* disable reset */
-    PrmTimeDelay(pb, 0, 0, 50);
+    PrmTimeDelay(pb, 0, 0, 5000);
     *fs_cfreg &= 0x7fffffff; 				/* reset */
-    PrmTimeDelay(pb, 0, 0, 50);
+    PrmTimeDelay(pb, 0, 0, 5000);
     *fs_cfreg |= 0xc0000000; 				/* disable reset, enable ints */
-    PrmTimeDelay(pb, 0, 0, 50);
+    PrmTimeDelay(pb, 0, 0, 5000);
     cfspace = (APTR)((ULONG)cfspace + fs_csreg);
   }
   else
@@ -2203,27 +2217,11 @@ APTR AllocDMABuffer(__reg("a6") struct PrometheusBase *pb, __reg("d0") ULONG siz
     struct Library *CardBase;
 	APTR mem;
 
-	struct TagItem myTags1[] =
-    {
-        PRM_Vendor, VID_3DFX,
-        TAG_DONE
-    };
-/*
-	struct TagItem myTags2[] =
-    {
-        PRM_Vendor, VID_TI,
-        PRM_Device, DEVID_PERMEDIA2,
-        TAG_DONE
-    };
-*/
     D(kprintf("Prm_AllocDMABuffer size 0x%08lx\n", size));
 
-    if ((FindBoardTagList(pb, NULL, (struct TagItem*)&myTags1))) //||
-//        (FindBoardTagList(pb, NULL, (struct TagItem*)&myTags2)))
-    {
       if (!pb->pb_DMASuppBase)
       {
-        pb->pb_DMASuppBase = OpenLibrary("Prometheus.card", 7);
+        pb->pb_DMASuppBase = OpenLibrary(CARD_NAME, 7);
       }
 
       if (CardBase = pb->pb_DMASuppBase)
@@ -2232,7 +2230,6 @@ APTR AllocDMABuffer(__reg("a6") struct PrometheusBase *pb, __reg("d0") ULONG siz
   	    D(kprintf("Prm_AllocDMABuffer ptr 0x%08lx\n", mem));
         return mem;
       }
-    }
     return NULL;
   }
 
@@ -2275,27 +2272,12 @@ void FreeDMABuffer( __reg("a6") struct PrometheusBase *pb, __reg("a0") APTR buff
     struct Library *SysBase = pb->pb_SysBase;
     struct Library *CardBase;
 
-	struct TagItem myTags1[] =
-    {
-        PRM_Vendor, VID_3DFX,
-        TAG_DONE
-    };
-/*
-	struct TagItem myTags2[] =
-    {
-        PRM_Vendor, VID_TI,
-        PRM_Device, DEVID_PERMEDIA2,
-        TAG_DONE
-    };
-*/
 	D(kprintf("Prm_FreeDMABuffer 0x%08lx 0x%08lx\n", buffer, size));
 
-    if ((FindBoardTagList(pb, NULL, (struct TagItem*)&myTags1)))// ||
-//        (FindBoardTagList(pb, NULL, (struct TagItem*)&myTags2)))
     {
       if (!pb->pb_DMASuppBase)
       {
-        pb->pb_DMASuppBase = OpenLibrary("Prometheus.card", 7);
+        pb->pb_DMASuppBase = OpenLibrary(CARD_NAME, 7);
       }
 
       if (CardBase = pb->pb_DMASuppBase)
@@ -2400,10 +2382,10 @@ APTR GetVirtualAddress( __reg("a6") struct PrometheusBase *pb, __reg("d0") APTR 
 
 	if(pb->pb_FireStorm == TRUE) {
 		if ( (ULONG)addr >= FS_PCI_ADDR_CONFIG0 ) return NULL;
-		else return (APTR)((ULONG)addr);
+		else return (APTR)((ULONG)addr + (ULONG)pb->pb_BaseAddr);
 	} else {
 		if ( ((ULONG)addr < 0x00100000) || ((ULONG)addr > 0x1FFFFFFF) ) return NULL;
-		else return (APTR)((ULONG)addr);
+		else return (APTR)((ULONG)addr + (ULONG)pb->pb_BaseAddr);
 	}
 }
 
