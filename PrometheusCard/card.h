@@ -26,6 +26,7 @@ struct DMAMemChunk
     APTR            dmc_Address;      /* logical (CPU) address */
     struct Task    *dmc_Owner;        /* memory owner (NULL if none) */
     ULONG           dmc_Size;         /* chunk size in bytes */
+    APTR            dmc_AlignedAddr;  /* Aligned on 4K address */
   };
 
 struct CardBase

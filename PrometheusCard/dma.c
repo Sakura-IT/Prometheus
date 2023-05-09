@@ -10,6 +10,8 @@
 
 #include <exec/memory.h>
 
+#define ALIGNMENT 4096
+
 /* PrometheusBase private fields are only used to extract SysBase, */
 /* it is much faster than read it from $00000004.                  */
 
@@ -33,7 +35,6 @@ APTR AllocDMAMemory(__REGD0(ULONG size), __REGA6(struct CardBase *cb))
     #ifdef DBG
       KPrintf("prometheus.card: allocDMA(%ld)\n", size);
     #endif
-    size = ((size + 3) & ~3);
 
     if (size == 0)
       {
@@ -43,8 +44,9 @@ APTR AllocDMAMemory(__REGD0(ULONG size), __REGA6(struct CardBase *cb))
         return NULL;
       }
 
-    ObtainSemaphore(cb->cb_MemSem);
+    size = size + ALIGNMENT;
 
+    ObtainSemaphore(cb->cb_MemSem);
 
     for (mem = (struct DMAMemChunk*)cb->cb_MemList.mlh_Head;
      mem->dmc_Node.mln_Succ;
@@ -81,6 +83,8 @@ APTR AllocDMAMemory(__REGD0(ULONG size), __REGA6(struct CardBase *cb))
                 memaddr = best->dmc_Address;
               }
           }
+       memaddr = (APTR)(((ULONG)memaddr + (ALIGNMENT - 1)) & (-ALIGNMENT));
+       best->dmc_AlignedAddr = memaddr;
       }
     ReleaseSemaphore(cb->cb_MemSem);
     return memaddr;
@@ -116,7 +120,7 @@ void FreeDMAMemory(__REGA0(APTR membase), __REGD0(ULONG memsize), __REGA6(struct
      mem->dmc_Node.mln_Succ;
      mem = (struct DMAMemChunk*)mem->dmc_Node.mln_Succ)
       {
-        if(mem->dmc_Address == membase) break;
+        if(mem->dmc_AlignedAddr == membase) break;
       }
 
     if (!mem->dmc_Node.mln_Succ)
