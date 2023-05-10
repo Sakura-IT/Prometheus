@@ -1,7 +1,7 @@
-#include  <proto/exec.h>
-#include  <proto/prometheus.h>
-#include  <libraries/prometheus.h>
-#include  <proto/picasso96_chip.h>
+#include <proto/exec.h>
+#include <proto/prometheus.h>
+#include <libraries/prometheus.h>
+#include <proto/picasso96_chip.h>
 
 #include "card.h"
 

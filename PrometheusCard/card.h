@@ -1,9 +1,5 @@
 #include "boardinfo.h"
 
-//--------------------------------------------------------------------------------------
-//#define DBG 1         /* uncomment to switch KPrintf() debug messages on */
-//--------------------------------------------------------------------------------------
-
 #define JSetOldDPMSLevel    CardData[14]
 #define JDPMSLevel          CardData[15]
 
@@ -16,7 +12,12 @@
 
 #define LIB(a) struct Library *##a = cb->cb_##a
 
-void illegal(void)="\tillegal\n";
+#ifdef DEBUG
+#define D(x) x
+void kprintf(STRPTR format, ...);
+#else
+#define D(x)
+#endif
 
 /* DMAMemChunk structure describes single DMA memory chunk. */
 

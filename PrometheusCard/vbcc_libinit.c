@@ -1,11 +1,13 @@
 /*
 $VER: Prometheus.card 7.601 (08.05.2023) by Dennis Boon with fixes from Mathias Heyer
 - Added more S3 cards for DMA to card_s3virge.c
+- Bumped version past 7.530 of which source was lost
 $VER: Prometheus.card 6.504 (19.08.2002) by Grzegorz Kraszewski
 */
 
 #define __NOLIBBASE__
 
+#include <stdarg.h>
 #include <proto/exec.h>
 #include <proto/expansion.h>
 #include <proto/utility.h>
@@ -31,13 +33,46 @@ struct CardBase *LibInit (__REGD0(struct CardBase* cb), __REGA0(APTR seglist), _
 #define VERSION  7
 #define REVISION 601
 
-char libid[]   = "\0$VER: Prometheus.card 7.601 (08.05.2023).\r\n";
-char libname[] = "Prometheus.card";
-
 int main(void)
 {
     return -1;
 }
+
+#ifdef DEBUG
+#define __DBG__ "debug "
+APTR __DRawPutChar(__reg("a6") void *, __reg("d0") UBYTE MyChar)="\tjsr\t-516(a6)";
+
+#define DRawPutChar(MyChar) __DRawPutChar(SysBase, (MyChar))
+
+void DPutChProc(__reg("d0") UBYTE mychar, __reg("a3") APTR PutChData)
+{
+    struct ExecBase* SysBase = (struct ExecBase*)PutChData;
+    DRawPutChar(mychar);
+    return;
+}
+
+void kprintf(STRPTR format, ...)
+{
+    if (format)
+    {
+        struct ExecBase* SysBase = *(struct ExecBase **)4L;
+        va_list args;
+        va_start(args, format);
+        RawDoFmt(format, (APTR)args, &DPutChProc, (APTR)SysBase);
+        va_end(args);
+    }
+    return;
+}
+#else
+#define __DBG__
+#endif
+
+
+char libid[]   = "\0$VER: Prometheus.card 7.601 " __DBG__ "(10.05.2023)\r\n";
+char libname[] = "Prometheus.card\0";
+
+char build[]   = "build date: " __DATE__ ", " __TIME__ "\n";
+
 
 /*--------------------------------------------------------------------------*/
 
@@ -181,9 +216,7 @@ struct CardBase *LibInit (__REGD0(struct CardBase* cb), __REGA0(APTR seglist), _
   {
     struct ExecBase *SysBase = (struct ExecBase*)sysb;
 
-    #ifdef DBG
-      KPrintf("prometheus.card: LibInit()\n");
-    #endif
+    D(kprintf("prometheus.card: LibInit()\n"));
 
     if (!(SysBase->AttnFlags & AFF_68020))
       {

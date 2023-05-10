@@ -1,10 +1,9 @@
 #include <exec/libraries.h>
-
-#include  <proto/exec.h>
-#include  <proto/utility.h>
-#include  <proto/expansion.h>
-#include  <proto/prometheus.h>
-#include  <libraries/prometheus.h>
+#include <proto/exec.h>
+#include <proto/utility.h>
+#include <proto/expansion.h>
+#include <proto/prometheus.h>
+#include <libraries/prometheus.h>
 #include <exec/execbase.h>
 #include <hardware/intbits.h>
 

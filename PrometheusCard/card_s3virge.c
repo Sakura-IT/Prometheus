@@ -14,10 +14,11 @@ struct CardInfo
 
 static ULONG count = 0;
 #define PCI_VENDOR	0x5333
-#define CHIP_NAME		"picasso96/S3ViRGE.chip"
+#define CHIP_VIRGE	     "picasso96/S3ViRGE.chip"
+#define CHIP_TRIO        "picasso96/S3Trio64.chip"
 
 #define	SystemSourceAperture	ChipData[0]
-#define	SpecialRegisterBase	ChipData[1]
+#define	SpecialRegisterBase     ChipData[1]
 #define	BusType					ChipData[3]	// 0: ZorroII - 1: ZorroIII - 2: PCI
 
 BOOL InitS3ViRGE(struct CardBase *cb, struct BoardInfo *bi)
@@ -31,6 +32,7 @@ BOOL InitS3ViRGE(struct CardBase *cb, struct BoardInfo *bi)
 	{
 		struct CardInfo ci;
 		BOOL found = FALSE;
+        BOOL trio = FALSE;
 
 		Prm_GetBoardAttrsTags(board,
 			PRM_Device, (ULONG)&ci.Device,
@@ -40,11 +42,15 @@ BOOL InitS3ViRGE(struct CardBase *cb, struct BoardInfo *bi)
 
 		switch(ci.Device)
 		{
-			case 0x8A01:	// VirgeDX/GX
-			case 0x8A02:	// VirgeGX2
-			case 0x5631:	// 86c325 [ViRGE]
+            case 0x8A01:    // VirgeDX/GX
+            case 0x8A02:    // VirgeGX2
+            case 0x5631:    // 86c325 [ViRGE]
 				found = TRUE;
 				break;
+            case 0x8811:    // Trio64
+                found = TRUE;
+                trio  = TRUE;
+                break;
 			default:
 				found = FALSE;
 		}
@@ -60,11 +66,19 @@ BOOL InitS3ViRGE(struct CardBase *cb, struct BoardInfo *bi)
 			// don't care about possible errors from here on
 			count++;
 
-			if((ChipBase = (struct ChipBase *)OpenLibrary(CHIP_NAME, 7)) != NULL)
+            if(trio)
+            {
+                ChipBase = (struct ChipBase *)OpenLibrary(CHIP_TRIO,  7);
+            }
+            else
+            {
+                ChipBase = (struct ChipBase *)OpenLibrary(CHIP_VIRGE, 7);
+            }
+			if(ChipBase != NULL)
 			{
 				bi->ChipBase = ChipBase;
 
-				bi->MemoryBase				= (UBYTE *)((ULONG)ci.Memory0 + 0x2000000);
+				bi->MemoryBase				= (UBYTE *)((ULONG)ci.Memory0); // + 0x2000000);
 				bi->RegisterBase			= (UBYTE *)((ULONG)ci.Memory0 + 0x3008000);
 				bi->SpecialRegisterBase	    = (ULONG)ci.Memory0 + 0x3008000;
 				bi->MemoryIOBase			= (UBYTE *)((ULONG)ci.Memory0 + 0x3007FFC);
