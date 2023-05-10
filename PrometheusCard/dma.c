@@ -1,14 +1,11 @@
-/* $VER: dma.c 7.601 (08.05.2023) */
-
 #include <exec/libraries.h>
-
 #include <proto/exec.h>
 #include <proto/prometheus.h>
 #include <libraries/prometheus.h>
+#include <exec/memory.h>
+
 #include "boardinfo.h"
 #include "card.h"
-
-#include <exec/memory.h>
 
 #define ALIGNMENT 4096
 
@@ -32,19 +29,15 @@ APTR AllocDMAMemory(__REGD0(ULONG size), __REGA6(struct CardBase *cb))
     struct DMAMemChunk *mem, *best = NULL;
     APTR memaddr = NULL;
 
-    #ifdef DBG
-      KPrintf("prometheus.card: allocDMA(%ld)\n", size);
-    #endif
+    D(kprintf("prometheus.card: allocDMA(%ld)\n", size));
 
     if (size == 0)
       {
-        #ifdef DBG
-          KPrintf("prometheus.card: allocDMA() zero size!\n");
-        #endif
+        D(kprintf("prometheus.card: allocDMA() zero size!\n"));
         return NULL;
       }
 
-    size = size + ALIGNMENT;
+    size = (size + ALIGNMENT + 3) & ~3;
 
     ObtainSemaphore(cb->cb_MemSem);
 
@@ -71,9 +64,7 @@ APTR AllocDMAMemory(__REGD0(ULONG size), __REGA6(struct CardBase *cb))
           {
             if (mem = AllocPooled(cb->cb_MemPool, sizeof(struct DMAMemChunk)))
               {
-                #ifdef DBG
-                  KPrintf("prometheus.card: DMC allocated at $%08lx\n", (LONG)mem);
-                #endif
+                D(kprintf("prometheus.card: DMC allocated at $%08lx\n", (LONG)mem));
                 mem->dmc_Size = best->dmc_Size - size;
                 mem->dmc_Address = (APTR)((ULONG)best->dmc_Address + size);
                 mem->dmc_Owner = NULL;
@@ -87,6 +78,7 @@ APTR AllocDMAMemory(__REGD0(ULONG size), __REGA6(struct CardBase *cb))
        best->dmc_AlignedAddr = memaddr;
       }
     ReleaseSemaphore(cb->cb_MemSem);
+    D(kprintf("prometheus.card: Allocated DMA at $%08lx with size %ld\n", (LONG)memaddr, size));
     return memaddr;
   }
 
@@ -95,22 +87,17 @@ void FreeDMAMemory(__REGA0(APTR membase), __REGD0(ULONG memsize), __REGA6(struct
   {
     struct Library* SysBase = cb->cb_SysBase;
     struct DMAMemChunk *mem, *tmem;
-    #ifdef DBG
-      KPrintf("prometheus.card: freeDMA($%08lx, %ld)\n", (LONG)membase, memsize);
-    #endif
+
+    D(kprintf("prometheus.card: freeDMA($%08lx, %ld)\n", (LONG)membase, memsize));
     if (memsize == 0)
       {
-        #ifdef DBG
-          KPrintf("prometheus.card: freeDMA() zero size!\n");
-        #endif
+        D(kprintf("prometheus.card: freeDMA() zero size!\n"));
         return;
       }
 
     if (!membase)
       {
-        #ifdef DBG
-          KPrintf("prometheus.card: freeDMA() NULL pointer!\n");
-        #endif
+        D(kprintf("prometheus.card: freeDMA() NULL pointer!\n"));
         return;
       }
 
@@ -125,17 +112,13 @@ void FreeDMAMemory(__REGA0(APTR membase), __REGD0(ULONG memsize), __REGA6(struct
 
     if (!mem->dmc_Node.mln_Succ)
       {
-        #ifdef DBG
-          KPrintf("prometheus.card: freeDMA() block not found!\n");
-        #endif
+        D(kprintf("prometheus.card: freeDMA() block not found!\n"));
         return;
       }
 
     if (!mem->dmc_Owner)
       {
-        #ifdef DBG
-          KPrintf("prometheus.card: freeDMA() freed twice!\n");
-        #endif
+        D(kprintf("prometheus.card: freeDMA() freed twice!\n"));
         return;
       }
 
@@ -149,9 +132,7 @@ void FreeDMAMemory(__REGA0(APTR membase), __REGD0(ULONG memsize), __REGA6(struct
         mem->dmc_Address = tmem->dmc_Address;
         mem->dmc_Size += tmem->dmc_Size;
         Remove((struct Node*)tmem);
-        #ifdef DBG
-          KPrintf("prometheus.card: DMC at $%08lx will be freed\n", (LONG)tmem);
-        #endif
+        D(kprintf("prometheus.card: DMC at $%08lx will be freed\n", (LONG)tmem));
         FreePooled(cb->cb_MemPool, tmem, sizeof(struct DMAMemChunk));
       }
 
@@ -162,9 +143,7 @@ void FreeDMAMemory(__REGA0(APTR membase), __REGD0(ULONG memsize), __REGA6(struct
       {
         mem->dmc_Size += tmem->dmc_Size;
         Remove((struct Node*)tmem);
-        #ifdef DBG
-          KPrintf("prometheus.card: DMC at $%08lx will be freed\n", (LONG)tmem);
-        #endif
+        D(kprintf("prometheus.card: DMC at $%08lx will be freed\n", (LONG)tmem));
         FreePooled(cb->cb_MemPool, tmem, sizeof(struct DMAMemChunk));
       }
 
