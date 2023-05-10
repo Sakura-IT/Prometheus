@@ -93,6 +93,7 @@ typedef struct
 #define DEVID_VIRGE3D          0x5631
 #define DEVID_VIRGEDX          0x8A01
 #define DEVID_VIRGEGX2         0x8A02
+#define DEVID_TRIO64           0x8811
 
 struct PrometheusBase
 {
@@ -213,7 +214,7 @@ struct PciConfig
 #define __DBG__
 #endif
 
-char libid[]   = "\0$VER: prometheus.library 4.4 " __DBG__ "(08.05.2023)\r\n";
+char libid[]   = "\0$VER: prometheus.library 4.4 " __DBG__ "(10.05.2023)\r\n";
 char build[]   = "build date: " __DATE__ ", " __TIME__ "\n";
 char libname[] = "prometheus.library\0";
 
@@ -744,7 +745,7 @@ void QueryCard (struct PrometheusBase *pb, struct PCIBus *pcibus, volatile struc
 				memtype = BLOCK_GFXMEM;
               else if((vendor == VID_3DFX) && (basereg == 0))
                 memtype = BLOCK_CFGMEM;
-              else if((vendor == VID_S3) && (basereg == 0) && (device == DEVID_VIRGE3D || device == DEVID_VIRGEDX || device == DEVID_VIRGEGX2))
+              else if((vendor == VID_S3) && (basereg == 0) && (device == DEVID_VIRGE3D || device == DEVID_VIRGEDX || device == DEVID_VIRGEGX2 || device == DEVID_TRIO64))
                 memtype = BLOCK_GFXMEM;
               else
                 memtype = BLOCK_MEMORY;
