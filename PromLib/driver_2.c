@@ -1,4 +1,6 @@
 /* 
+$VER: driver.c 4.5 (14.01.2024) by Dennis Boon
+- Made a fix to the bus numbering of bridges and the setting of bridge memory limits
 $VER: driver.c 4.4 (08.05.2023) by Dennis Boon with fixes from Mathias Heyer
 - Removed restriction on AllocDMA/FreeDMA - prometheus.card now does the check
 - Some S3 cards can now be used for DMA purposes
@@ -204,7 +206,7 @@ struct PciConfig
 #define BLOCK_CFGMEM   4
 
 #define VERSION  4
-#define REVISION 4
+#define REVISION 5
 
 #define CARD_NAME "Picasso96/Prometheus.card"
 
@@ -214,7 +216,7 @@ struct PciConfig
 #define __DBG__
 #endif
 
-char libid[]   = "\0$VER: prometheus.library 4.4 " __DBG__ "(10.05.2023)\r\n";
+char libid[]   = "\0$VER: prometheus.library 4.5 " __DBG__ "(14.01.2024)\r\n";
 char build[]   = "build date: " __DATE__ ", " __TIME__ "\n";
 char libname[] = "prometheus.library\0";
 
@@ -700,16 +702,19 @@ void QueryCard (struct PrometheusBase *pb, struct PCIBus *pcibus, volatile struc
                 memsize = PCI_MEMSIZE_128MB; /* Flash ? */
               }
             }
+#if 0
             else if ((basereg == 2) && (device == DEVID_MPC831X))
             {
               memsize = PCI_MEMSIZE_16MB; /* Boot ROM? */
               flag = 1;
             }
+#endif //debugdebug
             else if (basereg != 0)
             {
               memsize = -1;
             }
           }
+
           else if ((vendor == VID_MOTOROLA) && (device == DEVID_POWERPLUSIII))
           {
             if (basereg == 0)
@@ -731,7 +736,7 @@ void QueryCard (struct PrometheusBase *pb, struct PCIBus *pcibus, volatile struc
             if (memsize & 0x00000001)
             {
               memtype = BLOCK_INOUT;
-              memsize = -(memsize & 0xFFFFFFFC);
+              memsize = (-(memsize & 0xFFFFFFFC)) & 0x0000FFFF;
               D(kprintf("[QueryCard]  io size: 0x%08lx\n", memsize));
             }
             else
@@ -856,6 +861,7 @@ void WriteAddresses(struct PrometheusBase *pb, struct ConfigDev *cdev)
   ULONG mask = ~(-cdev->cd_BoardSize);
   ULONG fs_size_mask = 0;
   UBYTE count;
+  UBYTE busnr = 0;
   ULONG memlimit, iolimit;
 
   //D(kprintf("WriteAddresses\n"));
@@ -951,7 +957,7 @@ void WriteAddresses(struct PrometheusBase *pb, struct ConfigDev *cdev)
 		  switch (srq->sr_Type)
 		  {
 			case BLOCK_GFXMEM:
-            case BLOCK_MEMORY:    mem_highaddr -= srq->sr_Size; break;
+			case BLOCK_MEMORY:    mem_highaddr -= srq->sr_Size; break;
 			case BLOCK_INOUT:     io_highaddr -= srq->sr_Size;  break;
 		  }
 
@@ -964,35 +970,51 @@ void WriteAddresses(struct PrometheusBase *pb, struct ConfigDev *cdev)
 
 		  switch (srq->sr_Type)
 		  {
-			  case BLOCK_GFXMEM:
-              case BLOCK_MEMORY:
-			  *srq->sr_CfgAddr = swapl((mem_highaddr | 1) & mask);
-			  srq->sr_Tag->ti_Data = mem_highaddr;
-			  D(kprintf("[WriteAddresses] Pri: %03ld, addr: 0x%08lx, bus: %ld\n", srq->sr_Node.ln_Pri, mem_highaddr, pbus->br_BusNr));
-			  break;
+			case BLOCK_GFXMEM:
+			case BLOCK_MEMORY:
+			*srq->sr_CfgAddr = swapl((mem_highaddr | 1) & mask);
+			srq->sr_Tag->ti_Data = mem_highaddr;
+			D(kprintf("[WriteAddresses] Pri: %03ld, addr: 0x%08lx, bus: %ld\n", srq->sr_Node.ln_Pri, mem_highaddr, pbus->br_BusNr));
+			break;
 			  
-			  case BLOCK_INOUT:
-			  *srq->sr_CfgAddr = swapl(io_highaddr & mask);
-			  srq->sr_Tag->ti_Data = io_highaddr;
-			  D(kprintf("[WriteAddresses] Pri: %03ld, addr: 0x%08lx, bus: %ld\n", srq->sr_Node.ln_Pri, io_highaddr, pbus->br_BusNr));
-			  break;
+			case BLOCK_INOUT:
+			*srq->sr_CfgAddr = swapl(io_highaddr & mask);
+			srq->sr_Tag->ti_Data = io_highaddr;
+			D(kprintf("[WriteAddresses] Pri: %03ld, addr: 0x%08lx, bus: %ld\n", srq->sr_Node.ln_Pri, io_highaddr, pbus->br_BusNr));
+			break;
 		  }
-		}
-		/* calculate new address space top address */
-		if(pbus->br_BusNr > 0)
-		{
-			memlimit = (mem_highaddr + 0x000FFFFF) & 0xFFF00000;
-			pbus->br_ConfigBase->types.t1.pc_MemoryLimit = swapw((memlimit >> 16) - 1);
-			pbus->br_ConfigBase->types.t1.pc_PrefetchMemLimit = swapw((memlimit >> 16) - 1);
-			D(kprintf("[WriteAddresses] bus: %lx, Adjusted Bus MemLimit: 0x%08lx\n", pbus->br_BusNr, pbus->br_ConfigBase->types.t1.pc_MemoryLimit));
-
-
-			iolimit = (io_highaddr + 0x0FFF) & 0xF000;
-			pbus->br_ConfigBase->types.t1.pc_IOLimit = ((iolimit >> 12) - 1);
-			D(kprintf("[WriteAddresses] bus: %lx, Adjusted Bus IOLimit: 0x%08lx\n", pbus->br_BusNr, pbus->br_ConfigBase->types.t1.pc_IOLimit));
 		}
 		CacheClearU();
 	  }
+      busnr = pbus->br_BusNr;
+  }
+
+  /* calculate new address space top address */
+
+
+  if (busnr > 0)
+  {
+
+#if 0 //We be cheating...
+    memlimit = (mem_highaddr + 0x000FFFFF) & 0xFFF00000;
+#else
+    memlimit = 0x1FC00000;
+#endif
+    iolimit = (io_highaddr + 0x0FFF) & 0xF000;
+
+    ForeachNode(&pb->pb_Busses, pbus)
+    {
+      if ((pbus->br_BusNr > 0) && (pbus->br_BusNr <= busnr)) /* This suffices for now */
+      {
+		pbus->br_ConfigBase->types.t1.pc_MemoryLimit = swapw((memlimit >> 16) - 1);
+		pbus->br_ConfigBase->types.t1.pc_PrefetchMemLimit = swapw((memlimit >> 16) - 1);
+		pbus->br_ConfigBase->types.t1.pc_IOLimit = ((iolimit >> 12) - 1);
+
+		D(kprintf("[WriteAddresses] bus: %lx, Adjusted Bus MemLimit: 0x%08lx\n", pbus->br_BusNr, pbus->br_ConfigBase->types.t1.pc_MemoryLimit));
+		D(kprintf("[WriteAddresses] bus: %lx, Adjusted Bus IOLimit: 0x%08lx\n", pbus->br_BusNr, pbus->br_ConfigBase->types.t1.pc_IOLimit));
+	  }
+    CacheClearU();
+    }
   }
   return;
 }
@@ -1022,8 +1044,8 @@ UBYTE ScanBus(struct PrometheusBase *pb, struct PCIBus *pBus, struct ConfigDev *
 
 		D(kprintf("[ScanBus] Found a PCI-PCI Bridge.\n"));
 
-		pci->types.t1.pc_PrimaryBus = pBus->br_pBusNr;				/* we are given the new bus data */
-		pci->types.t1.pc_SecondaryBus = pBus->br_BusNr;
+		pci->types.t1.pc_PrimaryBus = pBus->br_BusNr;			   /* we are given the new bus data */
+		pci->types.t1.pc_SecondaryBus = pBus->br_BusNr+1;
 		pci->types.t1.pc_SubordinateBus = 0xFF;
 		pbusnew = AddBus(pb, pBus->br_BusNr+1, pBus->br_BusNr);
 		pbusnew->br_ConfigBase = cfspace;							/* save for WriteAddresses access */
@@ -1232,7 +1254,8 @@ int main(void)
     pb->pb_Cards.mlh_Tail = NULL;
     pb->pb_Cards.mlh_TailPred = (struct MinNode*)&pb->pb_Cards.mlh_Head;
     pb->pb_BridgeCnt = 0;
-	printf("TestExe\n");
+    printf("TestExe\n");
+    
     if (pb->pb_MemPool = CreatePool(MEMF_ANY | MEMF_CLEAR, 4 * sizeof(PCIBoard), 4 * sizeof(PCIBoard)))
      {
       if (UtilityBase = OpenLibrary ("utility.library", 36))
@@ -1241,7 +1264,7 @@ int main(void)
         pb->pb_UtilityBase = UtilityBase;
         if (ExpansionBase = OpenLibrary ("expansion.library", 36))
          {
-		printf("TestExe\n");
+           printf("TestExe\n");
 
            while (driver = FindConfigDev(driver, 0xAD47, 1))     // find Matay board
            {
@@ -1631,16 +1654,17 @@ ULONG GetBoardAttrsTagList ( __reg("a6") struct PrometheusBase *pb, __reg("a0") 
 
 ULONG ReadConfigLong( __reg("a6") struct PrometheusBase *pb, __reg("a0") PCIBoard *board, __reg("d0") UBYTE offset)
 {
-//    volatile ULONG *cfgl = (ULONG*)board->pn_ConfigBase;
-	ULONG cfgl = (ULONG)board->pn_ConfigBase;
+    ULONG cfgl = (ULONG)board->pn_ConfigBase;
     struct Library *SysBase = pb->pb_SysBase;
     ULONG tmp;
 
     CacheClearU();
-    //return (swapl(cfgl[offset >> 2]));
+    
     tmp = swapl( *(ULONG*)(cfgl+(ULONG)offset));
-	D(kprintf("Prm_ReadConfigLong offset 0x%lx result 0x%08lx\n", offset, tmp));
-	return tmp;
+    
+    D(kprintf("Prm_ReadConfigLong offset 0x%lx result 0x%08lx\n", offset, tmp));
+	
+    return tmp;
 }
 
 /****** prometheus.library/Prm_ReadConfigWord *******************************
@@ -1684,15 +1708,17 @@ ULONG ReadConfigLong( __reg("a6") struct PrometheusBase *pb, __reg("a0") PCIBoar
 
 UWORD ReadConfigWord( __reg("a6") struct PrometheusBase *pb, __reg("a0") PCIBoard *board, __reg("d0") UBYTE offset)
 {
-//    volatile UWORD *cfgw = (UWORD*)board->pn_ConfigBase;
-	ULONG cfgw = (ULONG)board->pn_ConfigBase;
+
+    ULONG cfgw = (ULONG)board->pn_ConfigBase;
     struct Library *SysBase = pb->pb_SysBase;
-	UWORD tmp;
+    UWORD tmp;
 	
     CacheClearU();
-    //return (swapw(cfgw[(offset >> 1) ^ 1]));
+
     tmp = swapw( *(UWORD*)(cfgw+(ULONG)offset));
-	D(kprintf("Prm_ReadConfigWord offset 0x%lx result 0x%04lx\n", offset, tmp));
+    
+    D(kprintf("Prm_ReadConfigWord offset 0x%lx result 0x%04lx\n", offset, tmp));
+    
     return tmp;
 }
 
@@ -1743,9 +1769,11 @@ UBYTE ReadConfigByte( __reg("a6") struct PrometheusBase *pb, __reg("a0") PCIBoar
     UBYTE tmp;
 
     CacheClearU();
-    //return (cfgb[offset ^ 3]);
+
     tmp = cfgb[offset];
-	D(kprintf("Prm_ReadConfigByte offset 0x%lx result 0x%02lx\n", offset, tmp));
+    
+    D(kprintf("Prm_ReadConfigByte offset 0x%lx result 0x%02lx\n", offset, tmp));
+    
     return tmp;
 }
 
@@ -1791,15 +1819,15 @@ UBYTE ReadConfigByte( __reg("a6") struct PrometheusBase *pb, __reg("a0") PCIBoar
 
 void WriteConfigLong( __reg("a6") struct PrometheusBase *pb, __reg("a0") PCIBoard *board, __reg("d0") ULONG data, __reg("d1") UBYTE offset)
 {
-//    volatile ULONG *cfgl = (ULONG*)board->pn_ConfigBase;
-	ULONG cfgl = (ULONG)board->pn_ConfigBase;
+    ULONG cfgl = (ULONG)board->pn_ConfigBase;
     struct Library *SysBase = pb->pb_SysBase;
 
-	D(kprintf("Prm_WriteConfigLong offset 0x%lx data 0x%08lx\n", offset, data));
+    D(kprintf("Prm_WriteConfigLong offset 0x%lx data 0x%08lx\n", offset, data));
 
-//    cfgl[offset >> 2] = swapl(data);
-	*(ULONG*)(cfgl+(ULONG)offset) = swapl(data);
+    *(ULONG*)(cfgl+(ULONG)offset) = swapl(data);
+
     CacheClearU();
+
     return;
 }
 
@@ -1853,15 +1881,15 @@ void WriteConfigLong( __reg("a6") struct PrometheusBase *pb, __reg("a0") PCIBoar
 
 void WriteConfigWord(__reg("a6") struct PrometheusBase *pb, __reg("a0") PCIBoard *board, __reg("d0") UWORD data, __reg("d1") UBYTE offset)
 {
-//    volatile UWORD *cfgw = (UWORD*)board->pn_ConfigBase;
-	ULONG cfgw = (ULONG)board->pn_ConfigBase;
+    ULONG cfgw = (ULONG)board->pn_ConfigBase;
     struct Library *SysBase = pb->pb_SysBase;
 
-	D(kprintf("Prm_WriteConfigWord offset 0x%lx data 0x%04lx\n", offset, data));
+    D(kprintf("Prm_WriteConfigWord offset 0x%lx data 0x%04lx\n", offset, data));
 
-//    cfgw[(offset >> 1) ^ 1] = swapw(data);
     *(UWORD*)(cfgw+(ULONG)offset) = swapw(data);
+
     CacheClearU();
+
     return;
 }
 
@@ -1917,11 +1945,12 @@ void WriteConfigByte( __reg("a6") struct PrometheusBase *pb, __reg("a0") PCIBoar
     volatile UBYTE *cfgb = (UBYTE*)board->pn_ConfigBase;
     struct Library *SysBase = pb->pb_SysBase;
 
-	D(kprintf("Prm_WriteConfigByte offset 0x%lx data 0x%02lx\n", offset, data));
+    D(kprintf("Prm_WriteConfigByte offset 0x%lx data 0x%02lx\n", offset, data));
 
-//    cfgb[offset ^ 3] = data;
-	cfgb[offset] = data;
+    cfgb[offset] = data;
+
     CacheClearU();
+
     return;
 }
 
@@ -2116,11 +2145,12 @@ BOOL AddIntServer_( __reg("a6") struct PrometheusBase *pb, __reg("a0") PCIBoard 
     struct Library *UtilityBase = pb->pb_UtilityBase;
     struct Library *SysBase = pb->pb_SysBase;
 
-	D(kprintf("Prm_AddIntServer\n"));
+    D(kprintf("Prm_AddIntServer\n"));
 
     if (!board) return FALSE;
 
     AddIntServer(INTB_PORTS, intr);
+    
     return TRUE;
   }
 
@@ -2165,7 +2195,7 @@ void RemIntServer_(__reg("a6") struct PrometheusBase *pb, __reg("a0") PCIBoard *
   {
     struct Library *SysBase = pb->pb_SysBase;
 
-	D(kprintf("Prm_RemIntServer\n"));
+    D(kprintf("Prm_RemIntServer\n"));
 
     if (!board) return;
     if (intr) RemIntServer(INTB_PORTS, intr);
@@ -2216,21 +2246,21 @@ APTR AllocDMABuffer(__reg("a6") struct PrometheusBase *pb, __reg("d0") ULONG siz
   {
     struct Library *SysBase = pb->pb_SysBase;
     struct Library *CardBase;
-	APTR mem;
+    APTR mem;
 
     D(kprintf("Prm_AllocDMABuffer size 0x%08lx\n", size));
 
-      if (!pb->pb_DMASuppBase)
-      {
-        pb->pb_DMASuppBase = OpenLibrary(CARD_NAME, 7);
-      }
+    if (!pb->pb_DMASuppBase)
+    {
+      pb->pb_DMASuppBase = OpenLibrary(CARD_NAME, 7);
+    }
 
-      if (CardBase = pb->pb_DMASuppBase)
-      {
-	    mem = (APTR)AllocDMAMem(size);
-  	    D(kprintf("Prm_AllocDMABuffer ptr 0x%08lx\n", mem));
-        return mem;
-      }
+    if (CardBase = pb->pb_DMASuppBase)
+    {
+      mem = (APTR)AllocDMAMem(size);
+      D(kprintf("Prm_AllocDMABuffer ptr 0x%08lx\n", mem));
+      return mem;
+    }
     return NULL;
   }
 
@@ -2273,7 +2303,7 @@ void FreeDMABuffer( __reg("a6") struct PrometheusBase *pb, __reg("a0") APTR buff
     struct Library *SysBase = pb->pb_SysBase;
     struct Library *CardBase;
 
-	D(kprintf("Prm_FreeDMABuffer 0x%08lx 0x%08lx\n", buffer, size));
+    D(kprintf("Prm_FreeDMABuffer 0x%08lx 0x%08lx\n", buffer, size));
 
     {
       if (!pb->pb_DMASuppBase)
@@ -2327,19 +2357,19 @@ void FreeDMABuffer( __reg("a6") struct PrometheusBase *pb, __reg("a0") APTR buff
 
 APTR GetPhysicalAddress( __reg("a6") struct PrometheusBase *pb, __reg("d0") APTR addr)
 {
-	D(kprintf("Prm_GetPhysicalAddress 0x%08lx\n", addr));
+    D(kprintf("Prm_GetPhysicalAddress 0x%08lx\n", addr));
 	
-	if(pb->pb_FireStorm == TRUE) {
-		if (((ULONG)addr < (ULONG)pb->pb_BaseAddr) ||
-			((ULONG)addr >= (ULONG)pb->pb_BaseAddr + FS_PCI_ADDR_CONFIG0)) return NULL;
-		else return (APTR)((ULONG)addr & 0x1FFFFFFF);
-	}
-	else
-	{
-		if (((ULONG)addr < (ULONG)pb->pb_BaseAddr + 0x00100000) ||
-			((ULONG)addr > (ULONG)pb->pb_BaseAddr + 0x1FFFFFFF)) return NULL;
-		else return (APTR)((ULONG)addr & 0x1FFFFFFF);
-	}
+    if(pb->pb_FireStorm == TRUE) {
+        if (((ULONG)addr < (ULONG)pb->pb_BaseAddr) ||
+            ((ULONG)addr >= (ULONG)pb->pb_BaseAddr + FS_PCI_ADDR_CONFIG0)) return NULL;
+        else return (APTR)((ULONG)addr & 0x1FFFFFFF);
+        }
+        else
+        {
+        if (((ULONG)addr < (ULONG)pb->pb_BaseAddr + 0x00100000) ||
+            ((ULONG)addr > (ULONG)pb->pb_BaseAddr + 0x1FFFFFFF)) return NULL;
+        else return (APTR)((ULONG)addr & 0x1FFFFFFF);
+        }
 }
 
 /****** prometheus.library/Prm_GetVirtualAddress ***************************
@@ -2379,15 +2409,15 @@ APTR GetPhysicalAddress( __reg("a6") struct PrometheusBase *pb, __reg("d0") APTR
 
 APTR GetVirtualAddress( __reg("a6") struct PrometheusBase *pb, __reg("d0") APTR addr)
 {
-	D(kprintf("Prm_GetVirtualAddress 0x%08lx\n", addr));
+    D(kprintf("Prm_GetVirtualAddress 0x%08lx\n", addr));
 
-	if(pb->pb_FireStorm == TRUE) {
-		if ( (ULONG)addr >= FS_PCI_ADDR_CONFIG0 ) return NULL;
-		else return (APTR)((ULONG)addr + (ULONG)pb->pb_BaseAddr);
-	} else {
-		if ( ((ULONG)addr < 0x00100000) || ((ULONG)addr > 0x1FFFFFFF) ) return NULL;
-		else return (APTR)((ULONG)addr + (ULONG)pb->pb_BaseAddr);
-	}
+    if(pb->pb_FireStorm == TRUE) {
+        if ( (ULONG)addr >= FS_PCI_ADDR_CONFIG0 ) return NULL;
+        else return (APTR)((ULONG)addr + (ULONG)pb->pb_BaseAddr);
+    } else {
+        if ( ((ULONG)addr < 0x00100000) || ((ULONG)addr > 0x1FFFFFFF) ) return NULL;
+        else return (APTR)((ULONG)addr + (ULONG)pb->pb_BaseAddr);
+    }
 }
 
 /****** prometheus.library/Prm_AllocPCIAddressSpace ******************************
