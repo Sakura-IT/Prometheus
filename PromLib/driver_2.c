@@ -1,5 +1,5 @@
 /* 
-$VER: driver.c 4.5 (14.01.2024) by Dennis Boon
+$VER: driver.c 4.5 (22.01.2024) by Dennis Boon and Jaime Cagigal
 - Made a fix to the bus numbering of bridges and the setting of bridge memory limits
 $VER: driver.c 4.4 (08.05.2023) by Dennis Boon with fixes from Mathias Heyer
 - Removed restriction on AllocDMA/FreeDMA - prometheus.card now does the check
@@ -216,7 +216,7 @@ struct PciConfig
 #define __DBG__
 #endif
 
-char libid[]   = "\0$VER: prometheus.library 4.5 " __DBG__ "(14.01.2024)\r\n";
+char libid[]   = "\0$VER: prometheus.library 4.5 " __DBG__ "(22.01.2024)\r\n";
 char build[]   = "build date: " __DATE__ ", " __TIME__ "\n";
 char libname[] = "prometheus.library\0";
 
@@ -379,7 +379,7 @@ void kprintf(STRPTR format, ...)
 #else
 void kprintf(const char *,...);
 #define D(x)
-#define CARDDELAY 10000 /* 10ms enough? */
+#define CARDDELAY 100000
 #endif
 #endif
 
@@ -1023,6 +1023,7 @@ UBYTE ScanBus(struct PrometheusBase *pb, struct PCIBus *pBus, struct ConfigDev *
 {
   struct Library *SysBase = pb->pb_SysBase;
   volatile struct PciConfig *pci;
+  volatile APTR mfptr;
   WORD function, funmax;                    /* introduced in V2.4 */
   WORD headertype, slot;
 
@@ -1078,20 +1079,22 @@ UBYTE ScanBus(struct PrometheusBase *pb, struct PCIBus *pBus, struct ConfigDev *
 
 		for (function = 0; function < funmax; function++)
 		{
-			QueryCard(pb, pBus, &pci[function<<8], cdev);
-			pci[function<<8].pc_LatencyTimer = 0x80;   /* no latency because of Zorro III design (v 2.5) */
+			mfptr = (APTR)(((ULONG)cfspace) + (function<<8));
+            pci = mfptr;
+            QueryCard(pb, pBus, pci, cdev);
+			pci->pc_LatencyTimer = 0x80;   /* should be no latency because of Zorro III design (v 2.5) */
 			if(((pci->pc_Vendor == swapw(VID_MOTOROLA)) && (pci->pc_Device == swapw(DEVID_MPC107)) && (pci->pc_Revision == 0x13)))
 			{
-				pci[function<<8].pc_Command = swapw(0x003);     /* do not enable busmaster for MPC107 rev 19*/
+				pci->pc_Command = swapw(0x003);     /* do not enable busmaster for MPC107 rev 19*/
 			}
 			else if(pci->pc_Vendor == swapw(VID_ATI))
 			{
-				pci[function<<8].pc_LatencyTimer = 0x80;
-				pci[function<<8].pc_Command = swapw(0x207);
+				pci->pc_LatencyTimer = 0x80;
+				pci->pc_Command = swapw(0x207);
 			}
 			else
 			{
-				pci[function<<8].pc_Command = swapw(0x007);     /* enable I/O, memory space and busmaster */
+				pci->pc_Command = swapw(0x007);     /* enable I/O, memory space and busmaster */
 			}
 		}
 		CacheClearU();
